@@ -13,7 +13,7 @@ from typing import Optional, Sequence, Union
 import torch
 from PIL import Image
 
-from vlx_seek.models.vlx_seek_1_5.builder import load_pretrained_model
+from vlx_seek.hardware import resolve_device
 from vlx_seek.models.vlx_seek_1_5.constants import (
     DEFAULT_IMAGE_TOKEN,
     DEFAULT_IM_END_TOKEN,
@@ -41,10 +41,12 @@ class VLXSeekWorker:
     auxiliary visual-prompt encoder and is required by region-level tasks.
     """
 
-    def __init__(self, model_path: str, device: str = "cuda"):
-        self.device = torch.device(device)
+    def __init__(self, model_path: str, device: str | torch.device | None = None):
+        self.device = resolve_device(device)
+        from vlx_seek.models.vlx_seek_1_5.builder import load_pretrained_model
+
         self.tokenizer, self.model, image_processors = load_pretrained_model(
-            model_path, device=device
+            model_path, device=self.device
         )
         self.image_processor, self.image_processor_aux = image_processors
         self.model.eval()

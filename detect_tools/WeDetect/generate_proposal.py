@@ -1093,7 +1093,7 @@ class SimpleYOLOWorldDetector(nn.Module):
             inputs.append(img)
             ratios.append(ratio)
             offsets.append(offset)
-        inputs = torch.stack(inputs, dim=0).cuda()
+        inputs = torch.stack(inputs, dim=0).to(self.embeddings.device)
         img_feats = self.backbone(inputs)
         img_feats = self.neck(img_feats)
         results = self.head_predict(img_feats)

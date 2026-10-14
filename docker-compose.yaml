@@ -1,0 +1,38 @@
+services:
+  seek-dev:
+    # image: swr.cn-south-1.myhuaweicloud.com/ascendhub/mindie:3.1.0-cann9.0.1-torch_npu2.9.0.post4-910b-openeuler24.03_lts-py3.11
+    image: registry.linker.cc/vlx/vlx-seek:py3.11-openeuler24.03-910b-aarch64
+    container_name: seek-dev
+    # entrypoint: sleep 100000000000000000000
+    entrypoint: sleep infinity
+    shm_size: 10g
+    ports:
+      - 8010:8000
+    environment:
+      - VLX_SEEK_BACKEND=${VLX_SEEK_BACKEND:-ascend}
+      - MAX_MODEL_LENGTH=32768
+      - TZ=Asia/Shanghai
+    devices:
+      - /dev/davinci2
+      # - /dev/davinci3
+      # - /dev/davinci4
+      # - /dev/davinci5
+      # - /dev/davinci6
+      # - /dev/davinci7
+      # - /dev/davinci8
+      # - /dev/davinci9
+      - /dev/davinci_manager
+      - /dev/devmm_svm
+      - /dev/hisi_hdc
+    volumes:
+      - /usr/local/dcmi:/usr/local/dcmi
+      - /usr/local/Ascend/driver/tools/hccn_tool:/usr/local/Ascend/driver/tools/hccn_tool
+      - /usr/local/bin/npu-smi:/usr/local/bin/npu-smi
+      - /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/
+      - /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info
+      - /etc/ascend_install.info:/etc/ascend_install.info
+      - ./:/workspace
+      #- /etc/localtime:/etc/localtime:ro
+      #- /etc/timezone:/etc/timezone:ro
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+    restart: always

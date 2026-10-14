@@ -32,6 +32,25 @@ resources/
 
 Alternatively, set paths with `--model-path` and `--detector-checkpoint`.
 
+### Hardware Selection
+
+Use `VLX_SEEK_BACKEND` to select hardware for both the CLI and `VLXSeekWorker`:
+
+| Value | Device |
+| --- | --- |
+| `auto` (default) | Detect NVIDIA CUDA first, then Ascend NPU, otherwise CPU |
+| `nvidia` | NVIDIA GPU with CUDA |
+| `ascend` | Ascend NPU; currently tested on 910B |
+| `cpu` | CPU with SDPA attention |
+| `apple` | Reserved for Apple M-series/MPS; not yet supported |
+
+```bash
+VLX_SEEK_BACKEND=nvidia python inference.py --task detection --text "orange; apple"
+VLX_SEEK_BACKEND=ascend python inference.py --task detection --text "orange; apple"
+```
+
+An explicit `--device cuda:1`, `--device npu:0`, or Python API `device=` overrides the environment variable. Selecting an unavailable backend raises an error instead of silently switching hardware. Auto detection reports an unsupported-backend error on an MPS-only machine until Apple support is implemented; use `cpu` to select the CPU path explicitly. NVIDIA/CPU selection does not require NPU dependencies or change CUDA APIs.
+
 ### Optional: Faster Inference
 
 The model uses Linear Attention layers. Without the corresponding acceleration kernels, you will see a warning like the following and fall back to a slower PyTorch implementation:
@@ -40,7 +59,7 @@ The model uses Linear Attention layers. Without the corresponding acceleration k
 The fast path is not available because one of the required library is not installed. Falling back to torch implementation.
 ```
 
-Installing [flash-linear-attention](https://github.com/fla-org/flash-linear-attention#installation) and [causal-conv1d](https://github.com/Dao-AILab/causal-conv1d) enables the fast path and speeds up inference.
+On NVIDIA GPUs, installing [flash-linear-attention](https://github.com/fla-org/flash-linear-attention#installation) and [causal-conv1d](https://github.com/Dao-AILab/causal-conv1d) enables the fast path. For NPU acceleration, see the [Ascend 910B instructions](#docker-inference-on-ascend-910b-aarch64) below.
 
 ## Docker Inference on NVIDIA x86 (e.g. A100)
 
@@ -86,6 +105,7 @@ docker run -d --name seek-dev \
   --shm-size=40g \
   -v "$PWD:/workspace" \
   -w /workspace \
+  -e VLX_SEEK_BACKEND=nvidia \
   registry.linker.cc/vlx/vlx-seek:py3.12-ubuntu24.04-nvidia-x86_64 \
   sleep infinity
 docker exec -it seek-dev bash
@@ -137,6 +157,7 @@ docker run -d --name seek-dev \
   -p 1233:8000 \
   -v "$PWD:/workspace" \
   -w /workspace \
+  -e VLX_SEEK_BACKEND=nvidia \
   registry.linker.cc/vlx/vlx-seek:py3.12-ubuntu24.04-t5000-aarch64 \
   sleep infinity
 docker exec -it seek-dev bash
@@ -154,6 +175,7 @@ docker run -d --name seek-dev \
   -p 1233:8000 \
   -v "$PWD:/workspace" \
   -w /workspace \
+  -e VLX_SEEK_BACKEND=nvidia \
   registry.linker.cc/vlx/vlx-seek:py3.12-ubuntu24.04-gb10-aarch64 \
   sleep infinity
 docker exec -it seek-dev bash
@@ -162,6 +184,64 @@ docker exec -it seek-dev bash
 `docker run` pulls the selected image if it is not available locally. Both commands mount the repository at `/workspace`, publish container port `8000` on host port `1233`, and use the container name `seek-dev`. Stop and remove an existing container with that name before switching platforms.
 
 Run the inference command in the NVIDIA x86 section from `/workspace` inside the container. Model downloads, local weight paths, and output paths work the same way as described there.
+
+## Docker Inference on Ascend 910B (aarch64)
+
+Use the prebuilt image on a Linux aarch64 host with an Ascend 910B NPU. The host needs Docker and a working Ascend driver; verify the device with `npu-smi info`. The image includes CANN 9.0.1, PyTorch 2.9.0, `torch_npu` 2.9.0.post4, Transformers 5.13.0, Ascend Triton, and NPU FLA dependencies. This inference path has been tested on a 910B4-1.
+
+### Prepare the Image and Container
+
+Clone the repository as shown above, then run the following commands from its root:
+
+```bash
+docker pull registry.linker.cc/vlx/vlx-seek:py3.11-openeuler24.03-910b-aarch64
+docker run -d --name seek-dev \
+  --entrypoint sleep \
+  --device /dev/davinci0 \
+  --device /dev/davinci_manager \
+  --device /dev/devmm_svm \
+  --device /dev/hisi_hdc \
+  --shm-size=10g \
+  -v /usr/local/dcmi:/usr/local/dcmi \
+  -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+  -v /usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64 \
+  -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info \
+  -v /etc/ascend_install.info:/etc/ascend_install.info \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  -e VLX_SEEK_BACKEND=ascend \
+  registry.linker.cc/vlx/vlx-seek:py3.11-openeuler24.03-910b-aarch64 \
+  infinity
+docker exec -it seek-dev bash
+```
+
+Replace `/dev/davinci0` with the host device selected using `npu-smi info`, for example `/dev/davinci2`. Adjust the driver mount paths if your host uses a different layout. All Docker examples use the container name `seek-dev`; use another name if it is already occupied.
+
+### Run Inference Inside the Container
+
+Run from `/workspace`:
+
+```bash
+VLX_SEEK_BACKEND=ascend VLX_SEEK_NPU_FLA=full python inference.py \
+  --model-path omlab/VLX-Seek-1.5-10B \
+  --image-path demo/demo_image.jpg \
+  --task detection \
+  --text "orange; apple"
+```
+
+The Ascend backend imports `torch_npu` and places both the proposal detector and VLX-Seek on NPU explicitly. It does not globally replace CUDA APIs. The image does not include model weights. The first run downloads the main model and, if needed, the proposal detector. To use local weights, set `--model-path resources/VLX-Seek-1.5-10B`. Results and the visualization are saved in the mounted repository as described above.
+
+NPU FLA is enabled by default when its dependencies are available:
+
+| `VLX_SEEK_NPU_FLA` | Behavior |
+| --- | --- |
+| `full` (default) | FLA prefill and token decoding |
+| `decode` | PyTorch prefill and FLA token decoding |
+| `off` | Original PyTorch linear attention |
+
+Look for `NPU FLA enabled on 24 linear-attention layers` to confirm activation. Transformers may print `The fast path is not available` before this message during model construction. The NPU path uses native ROIAlign and retains PyTorch causal convolution; the upstream CUDA `causal-conv1d` package is not required.
+
+The first run may take several minutes to compile Triton kernels. Measure performance after warmup; numerical differences from the PyTorch implementation are possible. See the [NPU FLA implementation and measurements (Chinese)](npu_fla_zh.md) for details.
 
 ## Region Proposals
 
@@ -331,7 +411,6 @@ from vlx_seek_worker import VLXSeekWorker
 
 worker = VLXSeekWorker(
     model_path="omlab/VLX-Seek-1.5-10B",
-    device="cuda",
 )
 image = Image.open("demo/demo_image.jpg").convert("RGB")
 boxes = [

@@ -1,20 +1,23 @@
 from transformers import AutoTokenizer
 import torch
-from vlx_seek.models.vlx_seek_1_5 import VLXSeek1_5ForCausalLM
+from vlx_seek.hardware import attention_implementation, resolve_device
 
 
-def load_pretrained_model(model_path, device="cuda", dtype=torch.bfloat16):
+def load_pretrained_model(model_path, device=None, dtype=torch.bfloat16):
     """Load a VLX-Seek model and its primary/auxiliary image processors.
 
     Args:
         model_path: Local checkpoint directory or Hugging Face model identifier.
-        device: Device or device-map target used to place model components.
+        device: Explicit device override; otherwise use VLX_SEEK_BACKEND.
         dtype: Floating-point precision used for vision towers.
 
     Returns:
         The tokenizer, loaded model, and a tuple containing primary and
         optional auxiliary image processors.
     """
+    device = resolve_device(device)
+    from vlx_seek.models.vlx_seek_1_5 import VLXSeek1_5ForCausalLM
+
     # Keep the model placement configuration consistent with Transformers.
     kwargs = {"device_map": device, "dtype": dtype}
 
@@ -24,11 +27,15 @@ def load_pretrained_model(model_path, device="cuda", dtype=torch.bfloat16):
         model = VLXSeek1_5ForCausalLM.from_pretrained(
                 model_path,
                 low_cpu_mem_usage=True,
-                attn_implementation="flash_attention_2",
+                attn_implementation=attention_implementation(device),
                 **kwargs
             )
     else:
         raise ValueError(f"Unsupported model: {model_path}")
+
+    if device.type == "npu":
+        from .npu_fla import enable_npu_fla
+        enable_npu_fla(model)
     
     vision_tower = model.get_vision_tower()
     if vision_tower and not vision_tower.is_loaded:

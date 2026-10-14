@@ -142,7 +142,7 @@ class CRadioV4AuxEncoder(AbsVisionTower):
 
     @property
     def device(self):
-        return 'cuda' if torch.cuda.is_available() else 'cpu'
+        return next(self.image_tower.radio_model.model.parameters()).device
 
     @property
     def config(self):

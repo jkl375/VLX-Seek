@@ -132,7 +132,7 @@ VLX-Seek 1.5 规划了 0.6B、3B 和 10B 三种模型规模。本仓库开源 **
 ## 环境要求
 
 - Python 3.10+
-- PyTorch（推荐 GPU）。请安装与你系统匹配的 CUDA 版本。
+- PyTorch（推荐 GPU 或 NPU）。请安装与你的平台匹配的版本。
 - 主要在 Linux 上完成测试与验证。
 
 ## 安装
@@ -152,6 +152,9 @@ pip install -r requirements.txt
 - [NVIDIA x86 显卡（A100、RTX 4090 等）](docs/inference_zh.md#nvidia-x86如-a100docker-推理)
 - [Jetson T5000](docs/inference_zh.md#t5000-docker-run)
 - [NVIDIA Spark GB10](docs/inference_zh.md#gb10-docker-run)
+- [昇腾 910B（aarch64），支持 NPU FLA 加速](docs/inference_zh.md#昇腾-910baarch64docker-推理)
+
+通过 `VLX_SEEK_BACKEND=nvidia` 或 `ascend` 选择硬件，默认 `auto` 自动检测。详情见[硬件选择](docs/inference_zh.md#硬件选择)。
 
 ## 模型权重
 
@@ -179,7 +182,7 @@ python inference.py \
 ```python
 from vlx_seek_worker import VLXSeekWorker
 
-worker = VLXSeekWorker("omlab/VLX-Seek-1.5-10B", device="cuda")
+worker = VLXSeekWorker("omlab/VLX-Seek-1.5-10B")
 ```
 
 ### 下载到本地
