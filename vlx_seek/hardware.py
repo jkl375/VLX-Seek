@@ -29,15 +29,14 @@ def _npu_available(required=False):
 def resolve_device(device=None):
     """Resolve --device/API overrides, otherwise VLX_SEEK_BACKEND (auto).
 
-    Auto prefers CUDA, then Ascend, then CPU. Apple/MPS is reserved until its
-    model and operator compatibility has been validated.
+    Auto prefers CUDA, then Ascend, then Apple/MPS, then CPU.
     """
     if device is None:
         backend = os.environ.get("VLX_SEEK_BACKEND", "auto").strip().lower()
         if backend not in _BACKENDS:
             raise ValueError(
-                "VLX_SEEK_BACKEND must be auto, nvidia, ascend, cpu, or apple "
-                "(reserved)."
+                "VLX_SEEK_BACKEND must be auto, nvidia/cuda, ascend/npu, "
+                "cpu, or apple/mps."
             )
         device = _BACKENDS[backend]
     else:
@@ -56,11 +55,9 @@ def resolve_device(device=None):
 
     kind = device.split(":", 1)[0]
     if kind == "mps":
-        raise NotImplementedError(
-            "Apple M-series/MPS is reserved but not yet supported by the "
-            "VLX-Seek inference pipeline. Use a supported backend for now."
-        )
-    if kind == "npu":
+        if not hasattr(torch.backends, "mps") or not torch.backends.mps.is_available():
+            raise RuntimeError("Apple backend selected, but MPS is unavailable.")
+    elif kind == "npu":
         if not _npu_available(required=True):
             raise RuntimeError("Ascend backend selected, but no NPU is available.")
     elif kind == "cuda":
@@ -72,5 +69,10 @@ def resolve_device(device=None):
 
 
 def attention_implementation(device):
-    """Keep accelerated attention on CUDA/NPU and a portable CPU path."""
+    """Keep accelerated attention on CUDA/NPU and portable CPU/MPS paths."""
     return "flash_attention_2" if device.type in ("cuda", "npu") else "sdpa"
+
+
+def inference_dtype(device):
+    """Use FP16 on MPS, including macOS versions without BF16 support."""
+    return torch.float16 if device.type == "mps" else torch.bfloat16

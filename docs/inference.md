@@ -38,18 +38,52 @@ Use `VLX_SEEK_BACKEND` to select hardware for both the CLI and `VLXSeekWorker`:
 
 | Value | Device |
 | --- | --- |
-| `auto` (default) | Detect NVIDIA CUDA first, then Ascend NPU, otherwise CPU |
+| `auto` (default) | Detect NVIDIA CUDA first, then Ascend NPU, then Apple MPS, otherwise CPU |
 | `nvidia` | NVIDIA GPU with CUDA |
 | `ascend` | Ascend NPU; currently tested on 910B |
 | `cpu` | CPU with SDPA attention |
-| `apple` | Reserved for Apple M-series/MPS; not yet supported |
+| `apple` / `mps` | Apple Silicon GPU with MPS and SDPA attention |
 
 ```bash
 VLX_SEEK_BACKEND=nvidia python inference.py --task detection --text "orange; apple"
 VLX_SEEK_BACKEND=ascend python inference.py --task detection --text "orange; apple"
+VLX_SEEK_BACKEND=apple python inference.py --task detection --text "orange; apple"
 ```
 
-An explicit `--device cuda:1`, `--device npu:0`, or Python API `device=` overrides the environment variable. Selecting an unavailable backend raises an error instead of silently switching hardware. Auto detection reports an unsupported-backend error on an MPS-only machine until Apple support is implemented; use `cpu` to select the CPU path explicitly. NVIDIA/CPU selection does not require NPU dependencies or change CUDA APIs.
+An explicit `--device cuda:1`, `--device npu:0`, `--device mps`, or Python API `device=` overrides the environment variable. Selecting an unavailable backend raises an error instead of silently switching hardware. NVIDIA/CPU/MPS selection does not require NPU dependencies or change CUDA APIs.
+
+### Apple Silicon (macOS)
+
+MPS is available only on the macOS host. Docker containers cannot access the
+host's MPS drivers; run the following installation and inference commands
+directly in a macOS terminal.
+
+We recommend downloading the Apple Silicon installer from the
+[Tsinghua Miniforge mirror](https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-26.7.2-0-MacOSX-arm64.sh).
+After downloading, run the installer from the directory containing it:
+
+```bash
+bash Miniforge3-26.7.2-0-MacOSX-arm64.sh
+```
+
+Follow the installer prompts to initialize conda, then open a new terminal.
+From the repository root, create the environment and install the macOS
+dependencies using the Tsinghua PyPI mirror. These dependencies omit CUDA-only
+Flash Attention:
+
+```bash
+conda create -n vlx-seek python=3.12
+conda activate vlx-seek
+pip install -r requirements_mac.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+Run inference in the activated environment:
+
+```bash
+python inference.py --device mps --task detection --text "orange; apple"
+```
+
+MPS uses FP16 model weights, SDPA attention, and the PyTorch Linear Attention implementation. The proposal detector also runs on MPS. ROIAlign runs in FP32 on CPU and returns features to MPS because torchvision has no native MPS ROIAlign kernel. This path does not require Flash Attention, Triton, or CUDA FLA kernels.
 
 ### Optional: Faster Inference
 

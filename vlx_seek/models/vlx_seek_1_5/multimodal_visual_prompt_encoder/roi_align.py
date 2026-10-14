@@ -1,4 +1,4 @@
-"""RoI Align with a native Ascend implementation for NPU feature maps."""
+"""RoI Align with native Ascend support and a CPU fallback for MPS."""
 
 import torch
 from torch.autograd.function import once_differentiable
@@ -44,7 +44,21 @@ def roi_align(
     sampling_ratio=-1,
     aligned=False,
 ):
-    """Keep torchvision semantics while avoiding its NPU-to-CPU fallback."""
+    """Keep torchvision semantics on backends without native torchvision ops."""
+    if input.device.type == "mps":
+        if isinstance(boxes, (list, tuple)) and len(boxes) == 0:
+            return input.reshape(-1)[:0].reshape(0, input.shape[1], *_pair(output_size))
+        # torchvision has no native MPS ROIAlign kernel. FP32 also supports
+        # half-precision feature maps on the CPU reference implementation.
+        if isinstance(boxes, (list, tuple)):
+            boxes = [box.to(device="cpu", dtype=torch.float32) for box in boxes]
+        else:
+            boxes = boxes.to(device="cpu", dtype=torch.float32)
+        result = torchvision_roi_align(
+            input.to(device="cpu", dtype=torch.float32), boxes, output_size,
+            spatial_scale, sampling_ratio, aligned
+        )
+        return result.to(device=input.device, dtype=input.dtype)
     if input.device.type != "npu":
         return torchvision_roi_align(
             input, boxes, output_size, spatial_scale, sampling_ratio, aligned

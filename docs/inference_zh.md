@@ -38,18 +38,48 @@ resources/
 
 | 值 | 设备 |
 | --- | --- |
-| `auto`（默认） | 优先检测 NVIDIA CUDA，再检测昇腾 NPU，否则使用 CPU |
+| `auto`（默认） | 优先检测 NVIDIA CUDA，再检测昇腾 NPU、Apple MPS，否则使用 CPU |
 | `nvidia` | NVIDIA CUDA GPU |
 | `ascend` | 昇腾 NPU，当前已在 910B 上验证 |
 | `cpu` | CPU，使用 SDPA 注意力 |
-| `apple` | 为 Apple M 系列/MPS 预留，尚未支持 |
+| `apple` / `mps` | Apple Silicon GPU，使用 MPS 和 SDPA 注意力 |
 
 ```bash
 VLX_SEEK_BACKEND=nvidia python inference.py --task detection --text "orange; apple"
 VLX_SEEK_BACKEND=ascend python inference.py --task detection --text "orange; apple"
+VLX_SEEK_BACKEND=apple python inference.py --task detection --text "orange; apple"
 ```
 
-显式传入 `--device cuda:1`、`--device npu:0` 或 Python API 的 `device=` 参数时，会覆盖环境变量。指定的硬件不可用时会报错，不会自动切换到其他硬件。仅有 MPS 的机器在自动检测时会提示 Apple 后端尚未适配，可通过 `cpu` 显式选择 CPU 路径。选择 NVIDIA/CPU 时不需要 NPU 依赖，也不会改写 CUDA API。
+显式传入 `--device cuda:1`、`--device npu:0`、`--device mps` 或 Python API 的 `device=` 参数时，会覆盖环境变量。指定的硬件不可用时会报错，不会自动切换到其他硬件。选择 NVIDIA/CPU/MPS 时不需要 NPU 依赖，也不会改写 CUDA API。
+
+### Apple Silicon（macOS）
+
+MPS 只能在 macOS 宿主机上使用。Docker 容器无法访问宿主机的 MPS 驱动，
+以下安装和推理命令均需直接在 macOS 终端中执行。
+
+建议从[清华 Miniforge 镜像源](https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-26.7.2-0-MacOSX-arm64.sh)
+下载 Apple Silicon 安装脚本。下载后，在脚本所在目录执行：
+
+```bash
+bash Miniforge3-26.7.2-0-MacOSX-arm64.sh
+```
+
+按安装提示初始化 conda，然后重新打开终端。在仓库根目录创建环境，
+并通过清华 PyPI 源安装 macOS 依赖，其中不包含仅适用于 CUDA 的 Flash Attention：
+
+```bash
+conda create -n vlx-seek python=3.12
+conda activate vlx-seek
+pip install -r requirements_mac.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+在已激活的环境中运行推理：
+
+```bash
+python inference.py --device mps --task detection --text "orange; apple"
+```
+
+MPS 默认使用 FP16 模型权重、SDPA 注意力和 PyTorch 线性注意力实现，候选框检测器也在 MPS 上运行。由于 torchvision 没有原生 MPS ROIAlign 内核，该算子以 FP32 在 CPU 上计算，然后将特征传回 MPS。此路径无需安装 Flash Attention、Triton 或 CUDA FLA 内核。
 
 ### 可选：加速推理
 

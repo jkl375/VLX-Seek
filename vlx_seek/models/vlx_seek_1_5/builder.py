@@ -1,21 +1,22 @@
 from transformers import AutoTokenizer
-import torch
-from vlx_seek.hardware import attention_implementation, resolve_device
+from vlx_seek.hardware import attention_implementation, inference_dtype, resolve_device
 
 
-def load_pretrained_model(model_path, device=None, dtype=torch.bfloat16):
+def load_pretrained_model(model_path, device=None, dtype=None):
     """Load a VLX-Seek model and its primary/auxiliary image processors.
 
     Args:
         model_path: Local checkpoint directory or Hugging Face model identifier.
         device: Explicit device override; otherwise use VLX_SEEK_BACKEND.
-        dtype: Floating-point precision used for vision towers.
+        dtype: Model/vision precision; defaults to FP16 on MPS, BF16 otherwise.
 
     Returns:
         The tokenizer, loaded model, and a tuple containing primary and
         optional auxiliary image processors.
     """
     device = resolve_device(device)
+    if dtype is None:
+        dtype = inference_dtype(device)
     from vlx_seek.models.vlx_seek_1_5 import VLXSeek1_5ForCausalLM
 
     # Keep the model placement configuration consistent with Transformers.

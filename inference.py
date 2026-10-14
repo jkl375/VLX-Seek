@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--device", default=None,
-        help="Override VLX_SEEK_BACKEND, e.g. cuda:0, npu:0, or cpu; default: auto.",
+        help="Override VLX_SEEK_BACKEND, e.g. cuda:0, npu:0, mps, or cpu; default: auto.",
     )
     parser.add_argument("--max-new-tokens", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=0.0)
@@ -204,7 +204,7 @@ def load_wedetect_proposals(
         boxes = outputs[0]["bboxes"].float().cpu().tolist()
 
     del outputs, model
-    if device.type in ("cuda", "npu"):
+    if device.type in ("cuda", "npu", "mps"):
         getattr(torch, device.type).empty_cache()
     return boxes
 

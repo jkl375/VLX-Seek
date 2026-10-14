@@ -132,8 +132,8 @@ VLX-Seek 1.5 规划了 0.6B、3B 和 10B 三种模型规模。本仓库开源 **
 ## 环境要求
 
 - Python 3.10+
-- PyTorch（推荐 GPU 或 NPU）。请安装与你的平台匹配的版本。
-- 主要在 Linux 上完成测试与验证。
+- PyTorch（推荐 NVIDIA CUDA GPU、昇腾 NPU 或 Apple Silicon MPS）。请安装与你的平台匹配的版本。
+- 已在 Linux（CUDA/NPU）和 macOS（Apple Silicon MPS）上完成推理测试与验证。
 
 ## 安装
 
@@ -144,6 +144,15 @@ git clone https://github.com/om-ai-lab/VLX-Seek.git
 cd VLX-Seek
 pip install -r requirements.txt
 ```
+
+### Apple Silicon 安装（macOS）
+
+MPS 只能在 macOS 宿主机上使用。Docker 容器无法访问宿主机的 MPS 驱动，
+因此安装和推理均需直接在 macOS 终端中执行。
+
+使用 `pip install -r requirements_mac.txt` 安装依赖，通过 `--device mps` 或
+`VLX_SEEK_BACKEND=apple` 选择设备。Miniforge 环境配置和清华源安装步骤详见
+[macOS 推理指南](docs/inference_zh.md#apple-siliconmacos)。
 
 ### Docker 安装
 

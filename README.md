@@ -135,8 +135,8 @@ See the [VLX-Seek 1.5 blog](https://om-ai-lab.github.io/2026_07_06_vlx_seek_1_5_
 ## Requirements
 
 - Python 3.10+
-- PyTorch (GPU or NPU recommended). Install the build matching your platform.
-- Linux is the primary tested platform.
+- PyTorch (NVIDIA CUDA GPU, Ascend NPU, or Apple Silicon MPS recommended). Install the build matching your platform.
+- Inference has been tested on Linux (CUDA/NPU) and macOS (Apple Silicon MPS).
 
 ## Installation
 
@@ -147,6 +147,15 @@ git clone https://github.com/om-ai-lab/VLX-Seek.git
 cd VLX-Seek
 pip install -r requirements.txt
 ```
+
+### Apple Silicon Installation (macOS)
+
+MPS is available only on the macOS host. Docker containers cannot access the
+host's MPS drivers, so run installation and inference directly in a macOS terminal.
+
+Use `pip install -r requirements_mac.txt` and select `--device mps` or
+`VLX_SEEK_BACKEND=apple`. For Miniforge setup and installation with Tsinghua
+mirrors, see the [macOS inference guide](docs/inference.md#apple-silicon-macos).
 
 ### Docker Installation
 
