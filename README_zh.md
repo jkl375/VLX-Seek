@@ -132,8 +132,8 @@ VLX-Seek 1.5 规划了 0.6B、3B 和 10B 三种模型规模。本仓库开源 **
 ## 环境要求
 
 - Python 3.10+
-- PyTorch（推荐 GPU）。请安装与你系统匹配的 CUDA 版本。
-- 主要在 Linux 上完成测试与验证。
+- PyTorch（推荐 NVIDIA CUDA GPU、昇腾 NPU 或 Apple Silicon MPS）。请安装与你的平台匹配的版本。
+- 已在 Linux（CUDA/NPU）和 macOS（Apple Silicon MPS）上完成推理测试与验证。
 
 ## 安装
 
@@ -145,6 +145,15 @@ cd VLX-Seek
 pip install -r requirements.txt
 ```
 
+### Apple Silicon 安装（macOS）
+
+MPS 只能在 macOS 宿主机上使用。Docker 容器无法访问宿主机的 MPS 驱动，
+因此安装和推理均需直接在 macOS 终端中执行。
+
+使用 `pip install -r requirements_mac.txt` 安装依赖，通过 `--device mps` 或
+`VLX_SEEK_BACKEND=apple` 选择设备。Miniforge 环境配置和清华源安装步骤详见
+[macOS 推理指南](docs/inference_zh.md#apple-siliconmacos)。
+
 ### Docker 安装
 
 驱动要求、各平台镜像及 `docker run` 启动命令请参阅以下指南：
@@ -152,6 +161,9 @@ pip install -r requirements.txt
 - [NVIDIA x86 显卡（A100、RTX 4090 等）](docs/inference_zh.md#nvidia-x86如-a100docker-推理)
 - [Jetson T5000](docs/inference_zh.md#t5000-docker-run)
 - [NVIDIA Spark GB10](docs/inference_zh.md#gb10-docker-run)
+- [昇腾 910B（aarch64），支持 NPU FLA 加速](docs/inference_zh.md#昇腾-910baarch64docker-推理)
+
+通过 `VLX_SEEK_BACKEND=nvidia` 或 `ascend` 选择硬件，默认 `auto` 自动检测。详情见[硬件选择](docs/inference_zh.md#硬件选择)。
 
 ## 模型权重
 
@@ -179,7 +191,7 @@ python inference.py \
 ```python
 from vlx_seek_worker import VLXSeekWorker
 
-worker = VLXSeekWorker("omlab/VLX-Seek-1.5-10B", device="cuda")
+worker = VLXSeekWorker("omlab/VLX-Seek-1.5-10B")
 ```
 
 ### 下载到本地

@@ -17,7 +17,6 @@ DEFAULT_DETECTOR_CHECKPOINT = "resources/wedetect_base_uni.pth"
 WEDETECT_HF_REPO_ID = "fushh7/WeDetect"
 WEDETECT_HF_FILENAME = "wedetect_base_uni.pth"
 
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run VLX-Seek 1.5 inference.")
     parser.add_argument("--model-path", default="resources/VLX-Seek-1.5-10B")
@@ -66,7 +65,10 @@ def parse_args() -> argparse.Namespace:
             "region_ocr. Required for those tasks, e.g. '[2, 3]'."
         ),
     )
-    parser.add_argument("--device", default="cuda")
+    parser.add_argument(
+        "--device", default=None,
+        help="Override VLX_SEEK_BACKEND, e.g. cuda:0, npu:0, mps, or cpu; default: auto.",
+    )
     parser.add_argument("--max-new-tokens", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
@@ -153,7 +155,7 @@ def ensure_wedetect_checkpoint(checkpoint_path: str) -> Path:
 
 
 def load_wedetect_proposals(
-    image: Image.Image, checkpoint_path: str
+    image: Image.Image, checkpoint_path: str, device=None
 ) -> list[list[float]]:
     """Generate the top 100 WeDetect-Uni xyxy proposals in original pixels."""
     checkpoint = ensure_wedetect_checkpoint(checkpoint_path)
@@ -163,6 +165,9 @@ def load_wedetect_proposals(
         sys.path.insert(0, str(wedetect_dir))
 
     import torch
+    from vlx_seek.hardware import resolve_device
+
+    device = resolve_device(device)
 
     proposal_module = importlib.import_module("generate_proposal")
     SimpleYOLOWorldDetector = proposal_module.SimpleYOLOWorldDetector
@@ -193,13 +198,14 @@ def load_wedetect_proposals(
             state_dict[new_key] = state_dict.pop(key)
 
     model.load_state_dict(state_dict, strict=False)
-    model = model.cuda().eval()
+    model = model.to(device).eval()
     with torch.inference_mode():
         outputs = model([image])
         boxes = outputs[0]["bboxes"].float().cpu().tolist()
 
     del outputs, model
-    torch.cuda.empty_cache()
+    if device.type in ("cuda", "npu", "mps"):
+        getattr(torch, device.type).empty_cache()
     return boxes
 
 
@@ -247,6 +253,10 @@ def default_visualization_output(image_path: str) -> str:
 
 def main() -> None:
     args = parse_args()
+    from vlx_seek.hardware import resolve_device
+
+    device = resolve_device(args.device)
+    print(f"VLX-Seek inference device: {device}", file=sys.stderr)
     # Keep --help usable in environments that do not have VLX-Seek's required
     # Qwen3.5-enabled transformers build installed.
     from vlx_seek_worker import VLXSeekWorker
@@ -264,7 +274,7 @@ def main() -> None:
     if args.task in proposal_tasks:
         boxes = load_boxes(args.bbox_list)
         if boxes is None:
-            boxes = load_wedetect_proposals(image, args.detector_checkpoint)
+            boxes = load_wedetect_proposals(image, args.detector_checkpoint, device=device)
         else:
             print(f"Using {len(boxes)} proposals from --bbox-list.", file=sys.stderr)
     target_region_indexes = (
@@ -272,7 +282,7 @@ def main() -> None:
         if args.task in {"brief_region_caption", "region_ocr"}
         else None
     )
-    worker = VLXSeekWorker(args.model_path, device=args.device)
+    worker = VLXSeekWorker(args.model_path, device=device)
     generation_kwargs = {
         "max_new_tokens": args.max_new_tokens,
         "temperature": args.temperature,
@@ -282,13 +292,17 @@ def main() -> None:
     if args.task == "vqa":
         result = worker.predict(image, args.text, **generation_kwargs)
     elif args.task == "detection":
-        result = worker.detect(
-            image,
-            boxes,
-            args.text,
-            lang=args.lang,
-            **generation_kwargs,
-        )
+        import time
+        for _ in range(10):
+            s = time.time()
+            result = worker.detect(
+                image,
+                boxes,
+                args.text,
+                lang=args.lang,
+                **generation_kwargs,
+            )
+            print("time:", time.time() - s)
     elif args.task == "grounding_single":
         result = worker.ground(
             image,

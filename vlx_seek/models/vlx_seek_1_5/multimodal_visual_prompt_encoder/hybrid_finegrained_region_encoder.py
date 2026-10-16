@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 from typing import List, Optional, Union
 import torch.nn.functional as F
-from torchvision.ops import roi_align
 import math
 import copy
 from .simple_fpn import SimpleFP
+
+from .roi_align import roi_align
 
 
 

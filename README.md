@@ -135,8 +135,8 @@ See the [VLX-Seek 1.5 blog](https://om-ai-lab.github.io/2026_07_06_vlx_seek_1_5_
 ## Requirements
 
 - Python 3.10+
-- PyTorch (GPU recommended). Please install the CUDA-enabled build that matches your system.
-- Linux is the primary tested platform.
+- PyTorch (NVIDIA CUDA GPU, Ascend NPU, or Apple Silicon MPS recommended). Install the build matching your platform.
+- Inference has been tested on Linux (CUDA/NPU) and macOS (Apple Silicon MPS).
 
 ## Installation
 
@@ -148,6 +148,15 @@ cd VLX-Seek
 pip install -r requirements.txt
 ```
 
+### Apple Silicon Installation (macOS)
+
+MPS is available only on the macOS host. Docker containers cannot access the
+host's MPS drivers, so run installation and inference directly in a macOS terminal.
+
+Use `pip install -r requirements_mac.txt` and select `--device mps` or
+`VLX_SEEK_BACKEND=apple`. For Miniforge setup and installation with Tsinghua
+mirrors, see the [macOS inference guide](docs/inference.md#apple-silicon-macos).
+
 ### Docker Installation
 
 For driver requirements, platform-specific images, and `docker run` commands, see the guides below:
@@ -155,6 +164,9 @@ For driver requirements, platform-specific images, and `docker run` commands, se
 - [NVIDIA x86 GPUs (A100, RTX 4090, etc.)](docs/inference.md#docker-inference-on-nvidia-x86-eg-a100)
 - [Jetson T5000](docs/inference.md#t5000-docker-run)
 - [NVIDIA Spark GB10](docs/inference.md#gb10-docker-run)
+- [Ascend 910B (aarch64), with NPU FLA support](docs/inference.md#docker-inference-on-ascend-910b-aarch64)
+
+Set `VLX_SEEK_BACKEND=nvidia` or `ascend` to select hardware, or leave it as `auto` (default). See [hardware selection](docs/inference.md#hardware-selection) for details.
 
 ## Model Weights
 
@@ -181,7 +193,7 @@ In Python, you can also load the model with:
 ```python
 from vlx_seek_worker import VLXSeekWorker
 
-worker = VLXSeekWorker("omlab/VLX-Seek-1.5-10B", device="cuda")
+worker = VLXSeekWorker("omlab/VLX-Seek-1.5-10B")
 ```
 
 ### Download Locally

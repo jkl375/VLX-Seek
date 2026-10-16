@@ -32,6 +32,55 @@ resources/
 
 也可以通过 `--model-path` 和 `--detector-checkpoint` 指定其他路径。
 
+### 硬件选择
+
+命令行和 `VLXSeekWorker` 共用环境变量 `VLX_SEEK_BACKEND` 选择硬件：
+
+| 值 | 设备 |
+| --- | --- |
+| `auto`（默认） | 优先检测 NVIDIA CUDA，再检测昇腾 NPU、Apple MPS，否则使用 CPU |
+| `nvidia` | NVIDIA CUDA GPU |
+| `ascend` | 昇腾 NPU，当前已在 910B 上验证 |
+| `cpu` | CPU，使用 SDPA 注意力 |
+| `apple` / `mps` | Apple Silicon GPU，使用 MPS 和 SDPA 注意力 |
+
+```bash
+VLX_SEEK_BACKEND=nvidia python inference.py --task detection --text "orange; apple"
+VLX_SEEK_BACKEND=ascend python inference.py --task detection --text "orange; apple"
+VLX_SEEK_BACKEND=apple python inference.py --task detection --text "orange; apple"
+```
+
+显式传入 `--device cuda:1`、`--device npu:0`、`--device mps` 或 Python API 的 `device=` 参数时，会覆盖环境变量。指定的硬件不可用时会报错，不会自动切换到其他硬件。选择 NVIDIA/CPU/MPS 时不需要 NPU 依赖，也不会改写 CUDA API。
+
+### Apple Silicon（macOS）
+
+MPS 只能在 macOS 宿主机上使用。Docker 容器无法访问宿主机的 MPS 驱动，
+以下安装和推理命令均需直接在 macOS 终端中执行。
+
+建议从[清华 Miniforge 镜像源](https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-26.7.2-0-MacOSX-arm64.sh)
+下载 Apple Silicon 安装脚本。下载后，在脚本所在目录执行：
+
+```bash
+bash Miniforge3-26.7.2-0-MacOSX-arm64.sh
+```
+
+按安装提示初始化 conda，然后重新打开终端。在仓库根目录创建环境，
+并通过清华 PyPI 源安装 macOS 依赖，其中不包含仅适用于 CUDA 的 Flash Attention：
+
+```bash
+conda create -n vlx-seek python=3.12
+conda activate vlx-seek
+pip install -r requirements_mac.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+在已激活的环境中运行推理：
+
+```bash
+python inference.py --device mps --task detection --text "orange; apple"
+```
+
+MPS 默认使用 FP16 模型权重、SDPA 注意力和 PyTorch 线性注意力实现，候选框检测器也在 MPS 上运行。由于 torchvision 没有原生 MPS ROIAlign 内核，该算子以 FP32 在 CPU 上计算，然后将特征传回 MPS。此路径无需安装 Flash Attention、Triton 或 CUDA FLA 内核。
+
 ### 可选：加速推理
 
 模型使用了 Linear Attention 层。如果缺少对应的加速内核，会看到类似如下警告，并回退到较慢的 PyTorch 实现：
@@ -40,7 +89,7 @@ resources/
 The fast path is not available because one of the required library is not installed. Falling back to torch implementation.
 ```
 
-安装 [flash-linear-attention](https://github.com/fla-org/flash-linear-attention#installation) 和 [causal-conv1d](https://github.com/Dao-AILab/causal-conv1d) 可以启用快速路径，从而提升推理速度。
+在 NVIDIA GPU 上，安装 [flash-linear-attention](https://github.com/fla-org/flash-linear-attention#installation) 和 [causal-conv1d](https://github.com/Dao-AILab/causal-conv1d) 可以启用快速路径。NPU 加速方式请参阅下文的[昇腾 910B 推理说明](#昇腾-910baarch64docker-推理)。
 
 ## NVIDIA x86（如 A100）Docker 推理
 
@@ -86,6 +135,7 @@ docker run -d --name seek-dev \
   --shm-size=40g \
   -v "$PWD:/workspace" \
   -w /workspace \
+  -e VLX_SEEK_BACKEND=nvidia \
   registry.linker.cc/vlx/vlx-seek:py3.12-ubuntu24.04-nvidia-x86_64 \
   sleep infinity
 docker exec -it seek-dev bash
@@ -138,6 +188,7 @@ docker run -d --name seek-dev \
   -p 1233:8000 \
   -v "$PWD:/workspace" \
   -w /workspace \
+  -e VLX_SEEK_BACKEND=nvidia \
   registry.linker.cc/vlx/vlx-seek:py3.12-ubuntu24.04-t5000-aarch64 \
   sleep infinity
 docker exec -it seek-dev bash
@@ -155,6 +206,7 @@ docker run -d --name seek-dev \
   -p 1233:8000 \
   -v "$PWD:/workspace" \
   -w /workspace \
+  -e VLX_SEEK_BACKEND=nvidia \
   registry.linker.cc/vlx/vlx-seek:py3.12-ubuntu24.04-gb10-aarch64 \
   sleep infinity
 docker exec -it seek-dev bash
@@ -163,6 +215,65 @@ docker exec -it seek-dev bash
 本地没有镜像时，`docker run` 会自动拉取对应镜像。两条命令均将仓库挂载到 `/workspace`，将容器端口 `8000` 映射到宿主机端口 `1233`，并使用容器名 `seek-dev`。切换平台前请先停止并移除同名容器。
 
 进入容器后，在 `/workspace` 下执行 NVIDIA x86 小节中的推理命令。模型下载、本地权重路径及结果路径的使用方式与上文相同。
+
+## 昇腾 910B（aarch64）Docker 推理
+
+支持在搭载昇腾 910B NPU 的 Linux aarch64 主机上使用预构建镜像推理。宿主机需安装 Docker 和可用的昇腾驱动，可通过 `npu-smi info` 检查设备。镜像包含 CANN 9.0.1、PyTorch 2.9.0、`torch_npu` 2.9.0.post4、Transformers 5.13.0、Ascend Triton 和 NPU FLA 依赖，当前已在 910B4-1 上验证。
+
+### 准备镜像并启动容器
+
+按上文克隆仓库，然后在仓库根目录执行：
+
+```bash
+docker pull registry.linker.cc/vlx/vlx-seek:py3.11-openeuler24.03-910b-aarch64
+docker run -d --name seek-dev \
+  --entrypoint sleep \
+  --device /dev/davinci0 \
+  --device /dev/davinci_manager \
+  --device /dev/devmm_svm \
+  --device /dev/hisi_hdc \
+  --shm-size=10g \
+  -v /usr/local/dcmi:/usr/local/dcmi \
+  -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+  -v /usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64 \
+  -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info \
+  -v /etc/ascend_install.info:/etc/ascend_install.info \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  -e VLX_SEEK_BACKEND=ascend \
+  registry.linker.cc/vlx/vlx-seek:py3.11-openeuler24.03-910b-aarch64 \
+  infinity
+docker exec -it seek-dev bash
+```
+
+根据 `npu-smi info` 选择宿主机设备，将 `/dev/davinci0` 改为实际使用的编号，例如 `/dev/davinci2`。如果宿主机驱动安装目录不同，请相应调整挂载路径。各平台示例均使用容器名 `seek-dev`，已有同名容器时请使用其他名称。
+
+### 在容器内执行推理
+
+在 `/workspace` 下运行：
+
+```bash
+VLX_SEEK_BACKEND=ascend VLX_SEEK_NPU_FLA=full python inference.py \
+  --model-path omlab/VLX-Seek-1.5-10B \
+  --image-path demo/demo_image.jpg \
+  --task detection \
+  --text "橘子; 苹果" \
+  --lang zh
+```
+
+昇腾后端会导入 `torch_npu`，并将候选框检测器和 VLX-Seek 显式放置到 NPU 上，不会全局改写 CUDA API。镜像不包含模型权重，首次运行会下载主模型及需要的候选框检测器。如使用本地权重，将参数改为 `--model-path resources/VLX-Seek-1.5-10B`。结果和可视化文件保存到宿主机挂载的仓库目录，使用方式与上文一致。
+
+依赖可用时，默认启用 NPU FLA，可通过环境变量切换：
+
+| `VLX_SEEK_NPU_FLA` | 行为 |
+| --- | --- |
+| `full`（默认） | FLA 预填充和逐 token 解码 |
+| `decode` | PyTorch 预填充，FLA 解码 |
+| `off` | 原 PyTorch 线性注意力 |
+
+以 `NPU FLA enabled on 24 linear-attention layers` 日志确认启用状态。Transformers 可能在模型构造时先打印 `The fast path is not available`。NPU 路径使用原生 ROIAlign，因果卷积继续使用 PyTorch，无需安装上游 CUDA 版 `causal-conv1d`。
+
+首次运行可能需要数分钟编译 Triton 内核，请在预热后测量性能。FLA 与 PyTorch 实现也可能存在小幅数值差异。实现细节和测量结果见 [NPU FLA 说明](npu_fla_zh.md)。
 
 ## 候选区域
 
@@ -339,7 +450,6 @@ from vlx_seek_worker import VLXSeekWorker
 
 worker = VLXSeekWorker(
     model_path="omlab/VLX-Seek-1.5-10B",
-    device="cuda",
 )
 image = Image.open("demo/demo_image.jpg").convert("RGB")
 boxes = [
