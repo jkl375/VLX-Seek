@@ -17,7 +17,7 @@
   <a href="https://www.youtube.com/@OmAILab_global">
     <img alt="YouTube" src="https://img.shields.io/badge/%F0%9F%93%A3%20YouTube-Subscribe%20%40OmAI%20lab-FF0000">
   </a>
-  <a href="https://discord.gg/SEVNjyXPef">
+  <a href="https://discord.gg/SEVNjyXPef ">
     <img alt="Discord" src="https://img.shields.io/badge/%F0%9F%93%A3%20Discord-Join%20%40OmAI%20lab-5865F2">
   </a>
   <br>
@@ -69,8 +69,8 @@ Join the VLX community to connect with developers, explore applications, share f
         <img src="assets/WeChat.png" alt="VLX official WeChat QR code" width="220">
       </td>
       <td align="center">
-        <a href="https://discord.gg/c3BNhbcyd">
-          <img src="assets/Discord.png" alt="VLX Discord community QR code" width="220">
+        <a href="https://discord.gg/SEVNjyXPef">
+          <img src="assets/Discord_261023.png" alt="VLX Discord community QR code" width="220">
         </a>
       </td>
     </tr>
@@ -399,6 +399,20 @@ The following figures report results for the original VLX-Seek 3B model. For VLX
 - Compared with coordinate-generation VLMs, VLX-Seek avoids long numeric box outputs and uses shorter, more stable region references, which can reduce decoding cost and improve response speed in multi-object scenarios.
 
 - Compared with simply attaching a detector head, VLX-Seek makes regions internal visual-language entities that can participate in reasoning, comparison, dialogue, and explanation.
+
+## Citation
+
+If you use VLX-Seek in your research, please cite this project:
+
+```bibtex
+@misc{omailab2026vlxseek,
+  author       = {{Om AI Lab}},
+  title        = {{VLX-Seek}: Fine-Grained Perception VLM: From Coordinate Generation to Region Reference},
+  year         = {2026},
+  howpublished = {\url{https://github.com/om-ai-lab/VLX-Seek}},
+  url          = {https://github.com/om-ai-lab/VLX-Seek}
+}
+```
 
 ## Technology Lineage
 
