@@ -69,8 +69,8 @@ VLX-Seek 是一个面向端侧具身视觉的细粒度感知视觉语言模型�
         <img src="assets/WeChat.png" alt="VLX 微信社群二维码" width="220">
       </td>
       <td align="center">
-        <a href="https://discord.gg/c3BNhbcyd">
-          <img src="assets/Discord.png" alt="VLX Discord 社区二维码" width="220">
+        <a href="https://discord.gg/SEVNjyXPef">
+          <img src="assets/Discord_261023.png" alt="VLX Discord 社区二维码" width="220">
         </a>
       </td>
     </tr>
@@ -393,6 +393,20 @@ VLX-Seek 不只学习“如何找到目标”，也学习“什么时候不该�
 - 相比传统检测器，VLX-Seek 能利用自然语言、开放词汇语义和视觉推理，而不只是预测封闭类别。
 - 相比坐标生成式 VLM，VLX-Seek 避免输出较长的数字坐标序列，改用更短、更稳定的区域引用，可降低多目标场景下的解码开销并提升响应速度。
 - 相比简单外接检测头的方案，VLX-Seek 把区域变成模型内部可以读取和引用的视觉语言实体，使区域能够参与推理、比较、对话和解释。
+
+## 引用
+
+如果您在研究中使用了 VLX-Seek，请引用本项目：
+
+```bibtex
+@misc{omailab2026vlxseek,
+  author       = {{OmAI Lab}},
+  title        = {{VLX-Seek}: Fine-Grained Perception VLM: From Coordinate Generation to Region Reference},
+  year         = {2026},
+  howpublished = {\url{https://github.com/om-ai-lab/VLX-Seek}},
+  url          = {https://github.com/om-ai-lab/VLX-Seek}
+}
+```
 
 ## 技术脉络
 
